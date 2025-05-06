@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS players (
     dob DATE,
     bats TEXT,
     throws TEXT
+    weight INTEGER
 )
 ''')
 
