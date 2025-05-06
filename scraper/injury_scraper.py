@@ -1,3 +1,6 @@
+
+
+
 import sqlite3
 import time
 from selenium import webdriver
@@ -31,7 +34,7 @@ def scrape_injuries(db_path):
 
         player_name = player_tag.text.strip()
 
-        # Extract all <strong> tags (Injury, IL date, etc.)
+        # Extract <strong> tags (Injury, IL date, etc.)
         strongs = block.find_all('strong')
 
         injury_type = ''
@@ -42,11 +45,11 @@ def scrape_injuries(db_path):
         for s in strongs:
             label = s.text.strip().lower()
             if 'injury' in label:
-                injury_type = s.next_sibling.strip()
+                injury_type = s.next_sibling.strip() if s.next_sibling else ''
             elif 'il date' in label:
-                il_date = s.next_sibling.strip()
+                il_date = s.next_sibling.strip() if s.next_sibling else ''
             elif 'expected return' in label:
-                expected_return = s.next_sibling.strip()
+                expected_return = s.next_sibling.strip() if s.next_sibling else ''
             elif 'status' in label:
                 # Get everything after the <strong>Status:</strong>
                 status_text = ''
@@ -66,16 +69,34 @@ def scrape_injuries(db_path):
         print(f"Status: {status}")
         print("-" * 40)
 
-        # Save to DB
+        # Add player to players table if not already there
+        cursor.execute('''
+            INSERT OR IGNORE INTO players (name)
+            VALUES (?)
+        ''', (player_name,))
+
+        # Get player_id
+        cursor.execute('''
+            SELECT player_id FROM players WHERE name = ?
+        ''', (player_name,))
+        result = cursor.fetchone()
+        player_id = result[0] if result else None
+
+        if player_id is None:
+            print(f"❌ Could not find or insert player: {player_name}")
+            continue
+
+        # Insert injury record
         cursor.execute('''
             INSERT INTO injuries (
-                player_name, injury_type, il_type, injury_start, notes
-            ) VALUES (?, ?, ?, ?, ?)
+                player_id, injury_type, il_type, injury_start, injury_end, notes
+            ) VALUES (?, ?, ?, ?, ?, ?)
         ''', (
-            player_name,
+            player_id,
             injury_type,
             il_date,
-            expected_return,
+            None,            # No injury_start
+            expected_return, # Goes in injury_end
             status
         ))
 
@@ -84,4 +105,4 @@ def scrape_injuries(db_path):
     print("✅ Scraping + saving complete.")
 
 if __name__ == '__main__':
-    scrape_injuries('data/dodgers_injury_db.sqlite') 
+    scrape_injuries('data/dodgers_injury_db.sqlite')
