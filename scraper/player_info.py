@@ -10,44 +10,67 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # URL to scrape
-url = 'https://www.mlb.com/dodgers/roster/40-man'
+url = 'https://www.mlb.com/dodgers/roster'
 
 # Fetch page content
 response = requests.get(url)
 soup = BeautifulSoup(response.text, 'html.parser')
 
-# Find all player rows
+# Find all player rows (tr elements)
 rows = soup.find_all('tr')
 
 for row in rows:
-    # Grab name
-    name_tag = row.find('a', href=True)
+    # Grab name and href (inside <td class="info">)
+    info_td = row.find('td', class_='info')
+    name_tag = info_td.find('a', href=True) if info_td else None
     name = name_tag.get_text(strip=True) if name_tag else None
 
-    # Position is tricky - Dodgers site may not have it right in the table, so let's assume None for now
-    # You can expand later if position info is added
+    # Extract MLB player ID from href
+    mlb_player_id = None
+    if name_tag:
+        href = name_tag['href']  # e.g., '/player/660271'
+        parts = href.strip('/').split('/')
+        if len(parts) >= 2 and parts[0] == 'player':
+            try:
+                mlb_player_id = int(parts[1])
+            except ValueError:
+                mlb_player_id = None
 
-    # DOB
+    # Grab DOB (first try <td>, fallback to mobile-info)
     dob_tag = row.find('td', class_='birthday')
     dob = dob_tag.get_text(strip=True) if dob_tag else None
+    if not dob and info_td:
+        dob_span = info_td.find('span', class_='mobile-info__birthday')
+        if dob_span:
+            dob = dob_span.get_text(strip=True).replace('DOB: ', '')
 
-    # Weight
+    # Grab Weight
     weight_tag = row.find('td', class_='weight')
     weight = weight_tag.get_text(strip=True) if weight_tag else None
+    if not weight and info_td:
+        weight_span = info_td.find('span', class_='mobile-info__weight')
+        if weight_span:
+            weight = weight_span.get_text(strip=True).replace('Wt: ', '')
 
-    # Bats/Throws (like "L/L")
+    # Grab Bats/Throws (like "L/R")
     bt_tag = row.find('td', class_='bat-throw')
     bats, throws = (None, None)
     if bt_tag:
         bt_text = bt_tag.get_text(strip=True)
         if '/' in bt_text:
             bats, throws = bt_text.split('/')
+    elif info_td:
+        bt_span = info_td.find('span', class_='mobile-info__bat-throw')
+        if bt_span:
+            bt_text = bt_span.get_text(strip=True).replace('B/T: ', '')
+            if '/' in bt_text:
+                bats, throws = bt_text.split('/')
 
-    # Skip if name is missing (avoid blank inserts)
+    # Skip if no name
     if not name:
         continue
 
-    print(f"Inserting: {name}, DOB: {dob}, Weight: {weight}, Bats: {bats}, Throws: {throws}")
+    print(f"Inserting: {name}, MLB ID: {mlb_player_id}, DOB: {dob}, Weight: {weight}, Bats: {bats}, Throws: {throws}")
 
     # Insert into the players table (skip if player already exists)
     cursor.execute('''

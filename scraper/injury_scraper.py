@@ -24,7 +24,7 @@ def scrape_injuries(db_path):
     cursor = conn.cursor()
 
     # Find all <p> blocks that contain injuries
-    injury_blocks = soup.find_all('p')
+    injury_blocks = soup.find_all('tr')
 
     for block in injury_blocks:
         # Must contain a player <a> tag
