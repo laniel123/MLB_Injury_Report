@@ -10,7 +10,7 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # URL to scrape
-url = 'https://www.mlb.com/dodgers/roster'
+url = 'https://www.mlb.com/dodgers/roster/40-man'
 
 # Fetch page content
 response = requests.get(url)
