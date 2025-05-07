@@ -1,57 +1,65 @@
 import sqlite3
 import pandas as pd
-import re
-import requests
-from bs4 import BeautifulSoup
 import time
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+from bs4 import BeautifulSoup
 
-# --- Step 1: Connect to SQLite and get player data ---
+# Database path
 db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
+
+# Connect to SQLite
 conn = sqlite3.connect(db_path)
 
-query = 'SELECT player_id, name FROM players'
-players_df = pd.read_sql_query(query, conn)
+# Initialize Selenium driver
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+
+def scrape_player(player_name, player_id):
+    url = f'https://www.mlb.com/player/{player_name}-{player_id}'
+    driver.get(url)
+    time.sleep(5)
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+
+    tables = soup.find_all('table')
+    for i, table in enumerate(tables):
+        print(f"🔹 Found Table {i + 1}")
+
+        headers = [th.text.strip() for th in table.find('thead').find_all('th')]
+        print(headers)
+
+        rows = []
+        for row in table.find('tbody').find_all('tr'):
+            cells = [td.text.strip() for td in row.find_all(['td', 'th'])]
+            rows.append(cells)
+            print(cells)
+
+        # Create DataFrame
+        df = pd.DataFrame(rows, columns=headers)
+
+        # Save each table to SQLite with a unique table name
+        table_name = f"{player_name}_table_{i+1}".replace('-', '_')
+        df.to_sql(table_name, conn, if_exists='replace', index=False)
+        print(f"✅ Saved table: {table_name}")
+
+# Example player list (you can extend this)
+players = [
+    ('james-outman', 680776),
+    ('andy-pages', 681624),
+    ('alex-vesia', 681911),
+    ('edgardo-henriquez', 683618),
+    ('emmet-sheehan', 686218),
+    ('landon-knack', 689017),
+    ('river-ryan', 689981),
+    ('nick-frasso', 693308),
+    ('gavin-stone', 694813)
+]
+
+# Loop over players and scrape
+for player_name, player_id in players:
+    print(f"\nScraping {player_name} from https://www.mlb.com/player/{player_name}-{player_id}")
+    scrape_player(player_name, player_id)
+
+# Close the driver and database connection
+driver.quit()
 conn.close()
-
-# --- Step 2: Slugify names for URLs ---
-def slugify(name):
-    name = name.lower()
-    name = re.sub(r'[^\w\s-]', '', name)  # Remove punctuation
-    name = name.replace(' ', '-')         # Replace spaces with hyphens
-    return name
-
-players_df['name_slug'] = players_df['name'].apply(slugify)
-players_df['url'] = players_df.apply(lambda row: f"https://www.mlb.com/player/{row['name_slug']}-{row['player_id']}", axis=1)
-
-# --- Step 3: Scrape stats from each player page ---
-for idx, row in players_df.iterrows():
-    player_name = row['name']
-    url = row['url']
-    print(f'\nScraping {player_name} from {url}')
-
-    try:
-        response = requests.get(url, timeout=10)
-        if response.status_code != 200:
-            print(f'❌ Failed to load {url} (Status {response.status_code})')
-            continue
-
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        # Find all tables (you can refine this with specific selectors later)
-        stats_tables = soup.find_all('table')
-
-        if not stats_tables:
-            print(f'⚠ No tables found on {url}')
-            continue
-
-        for table_idx, table in enumerate(stats_tables):
-            print(f'\n🔹 Table {table_idx + 1} for {player_name}')
-            for row in table.find_all('tr'):
-                cells = [cell.text.strip() for cell in row.find_all(['td', 'th'])]
-                if cells:
-                    print(cells)
-
-    except Exception as e:
-        print(f'⚠ Error scraping {url}: {e}')
-
-    time.sleep(1)  # Be polite to the server!
