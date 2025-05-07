@@ -7,9 +7,10 @@ db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodger
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-# Target URL
+# Target URL with User-Agent header
 url = 'https://www.mlb.com/news/dodgers-injuries-and-roster-moves'
-response = requests.get(url)
+headers = {'User-Agent': 'Mozilla/5.0'}
+response = requests.get(url, headers=headers)
 soup = BeautifulSoup(response.text, 'html.parser')
 
 # Find all relevant <p> blocks
@@ -31,32 +32,43 @@ for block in injury_blocks:
         strong_tags = block.find_all('strong')
         for tag in strong_tags:
             label = tag.get_text(strip=True)
-            if 'Injury:' in label:
-                injury_type = tag.next_sibling.strip()
-            elif 'Expected return:' in label:
-                expected_return = tag.next_sibling.strip()
-            elif 'Status:' in label:
-                status = tag.next_sibling.strip()
+            sibling = tag.next_sibling.strip() if tag.next_sibling else None
+            if 'Injury:' in label and sibling:
+                injury_type = sibling
+            elif 'Expected return:' in label and sibling:
+                expected_return = sibling
+            elif 'Status:' in label and sibling:
+                status = sibling
 
-        print(f"Inserting: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Expected Return: {expected_return}")
-
-        # Insert data into the injuries table
+        # Check for duplicates
         cursor.execute('''
-            INSERT INTO injuries (mlb_player_id, injury_type, il_type, injury_start, injury_end, notes)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (
-            mlb_player_id,
-            injury_type,
-            None,       # il_type (not available)
-            None,       # injury_start (not available)
-            expected_return,
-            status
-        ))
+            SELECT COUNT(*) FROM injuries 
+            WHERE mlb_player_id = ? AND injury_type = ?
+        ''', (mlb_player_id, injury_type))
+        if cursor.fetchone()[0] == 0:
+            cursor.execute('''
+                INSERT INTO injuries (mlb_player_id, injury_type, il_type, injury_start, injury_end, notes)
+                VALUES (?, ?, ?, ?, ?, ?)
+            ''', (
+                mlb_player_id,
+                injury_type,
+                None,       # il_type (not available)
+                None,       # injury_start (not available)
+                expected_return,
+                status
+            ))
+            print(f"✅ Inserted: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Expected Return: {expected_return}")
+
+            # Log to file
+            with open('/logs/scraper_log.txt', 'a') as log_file:
+                log_file.write(f"Inserted: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Expected Return: {expected_return}\n")
+        else:
+            print(f"⏩ Skipping duplicate for {player_name}")
 
     except Exception as e:
-        print(f"⚠️ Skipping due to error: {e}")
+        print(f"Skipping due to error: {e}")
 
 conn.commit()
 conn.close()
 
-print('✅ All injury data scraped and inserted!')
+print('All injury data scraped and inserted!')

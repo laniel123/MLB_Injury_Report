@@ -1,0 +1,3 @@
+Inserted: Brusdar Graterol, MLB ID: 660813, Injury: None, Expected Return: None
+Inserted: River Ryan, MLB ID: 689981, Injury: None, Expected Return: None
+Inserted: Gavin Stone, MLB ID: 694813, Injury: None, Expected Return: None

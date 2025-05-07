@@ -82,7 +82,7 @@ for row in rows:
         mlb_player_id,
         name,
         position,
-        'Los Angeles Dodgers',
+        'LAD',
         dob,
         bats,
         throws,
