@@ -1,6 +1,7 @@
 import sqlite3
 import requests
 from bs4 import BeautifulSoup
+import re
 
 # Connect to your local database
 db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
@@ -28,6 +29,12 @@ for block in injury_blocks:
         injury_type = None
         expected_return = None
         status = None
+        injury_start = None
+
+        # Extract IL date info from block text
+        il_match = re.search(r'IL date: (.*?)($|\))', block.get_text())
+        if il_match:
+            injury_start = il_match.group(1).strip()
 
         strong_tags = block.find_all('strong')
         for tag in strong_tags:
@@ -40,12 +47,32 @@ for block in injury_blocks:
             elif 'Status:' in label and sibling:
                 status = sibling
 
-        # Check for duplicates
+        # Check if record exists
         cursor.execute('''
             SELECT COUNT(*) FROM injuries 
             WHERE mlb_player_id = ? AND injury_type = ?
         ''', (mlb_player_id, injury_type))
-        if cursor.fetchone()[0] == 0:
+        exists = cursor.fetchone()[0] > 0
+
+        if exists:
+            # Update existing record
+            cursor.execute('''
+                UPDATE injuries
+                SET injury_start = ?, injury_end = ?, notes = ?
+                WHERE mlb_player_id = ? AND injury_type = ?
+            ''', (
+                injury_start,
+                expected_return,
+                status,
+                mlb_player_id,
+                injury_type
+            ))
+            print(f"🔄 Updated: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Injury Start: {injury_start}, Expected Return: {expected_return}")
+
+            with open('/logs/scraper_log.txt', 'a') as log_file:
+                log_file.write(f"Updated: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Injury Start: {injury_start}, Expected Return: {expected_return}\n")
+        else:
+            # Insert new record
             cursor.execute('''
                 INSERT INTO injuries (mlb_player_id, injury_type, il_type, injury_start, injury_end, notes)
                 VALUES (?, ?, ?, ?, ?, ?)
@@ -53,17 +80,14 @@ for block in injury_blocks:
                 mlb_player_id,
                 injury_type,
                 None,       # il_type (not available)
-                None,       # injury_start (not available)
+                injury_start,
                 expected_return,
                 status
             ))
-            print(f"✅ Inserted: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Expected Return: {expected_return}")
+            print(f"✅ Inserted: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Injury Start: {injury_start}, Expected Return: {expected_return}")
 
-            # Log to file
             with open('/logs/scraper_log.txt', 'a') as log_file:
-                log_file.write(f"Inserted: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Expected Return: {expected_return}\n")
-        else:
-            print(f"⏩ Skipping duplicate for {player_name}")
+                log_file.write(f"Inserted: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Injury Start: {injury_start}, Expected Return: {expected_return}\n")
 
     except Exception as e:
         print(f"Skipping due to error: {e}")
@@ -71,4 +95,4 @@ for block in injury_blocks:
 conn.commit()
 conn.close()
 
-print('All injury data scraped and inserted!')
+print('All injury data scraped and processed!')

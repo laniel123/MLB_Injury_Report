@@ -70,7 +70,7 @@ for row in rows:
                 bats, throws = bt_text.split('/')
 
     # Debug print
-    print(f"Inserting: {name}, ID: {mlb_player_id}, Position: {position}, DOB: {dob}, Weight: {weight}, Bats: {bats}, Throws: {throws}, HREF: {href}")
+    print(f"\nInserting: {name}, ID: {mlb_player_id}, Position: {position}, DOB: {dob}, Weight: {weight}, Bats: {bats}, Throws: {throws}, HREF: {href}")
 
     # Insert or ignore into players table
     cursor.execute('''
@@ -94,4 +94,4 @@ for row in rows:
 conn.commit()
 conn.close()
 
-print("\n\n Dodgers roster scraped and inserted into the database!\n\n")
+print("\n\n Dodgers roster scraped and inserted into the database!\n\n") 
