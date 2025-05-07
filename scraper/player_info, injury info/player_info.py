@@ -9,10 +9,6 @@ db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodger
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-# Optional: print table schema for debugging
-# cursor.execute("PRAGMA table_info(players);")
-# print(cursor.fetchall())
-
 # Dodgers roster URL
 url = 'https://www.mlb.com/dodgers/roster/40-man'
 
@@ -70,28 +66,51 @@ for row in rows:
                 bats, throws = bt_text.split('/')
 
     # Debug print
-    print(f"\nInserting: {name}, ID: {mlb_player_id}, Position: {position}, DOB: {dob}, Weight: {weight}, Bats: {bats}, Throws: {throws}, HREF: {href}")
+    print(f"\nProcessing: {name}, ID: {mlb_player_id}, Position: {position}, DOB: {dob}, Weight: {weight}, Bats: {bats}, Throws: {throws}, HREF: {href}")
 
-    # Insert or ignore into players table
-    cursor.execute('''
-        INSERT OR IGNORE INTO players (
-            mlb_player_id, name, position, team, dob, bats, throws, weight, href
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (
-        mlb_player_id,
-        name,
-        position,
-        'LAD',
-        dob,
-        bats,
-        throws,
-        int(weight) if weight and weight.isdigit() else None,
-        href
-    ))
+    # Check if player already exists
+    cursor.execute('SELECT COUNT(*) FROM players WHERE mlb_player_id = ?', (mlb_player_id,))
+    exists = cursor.fetchone()[0] > 0
+
+    if exists:
+        # Update existing record
+        cursor.execute('''
+            UPDATE players
+            SET name = ?, position = ?, team = ?, dob = ?, bats = ?, throws = ?, weight = ?, href = ?
+            WHERE mlb_player_id = ?
+        ''', (
+            name,
+            position,
+            'LAD',
+            dob,
+            bats,
+            throws,
+            int(weight) if weight and weight.isdigit() else None,
+            href,
+            mlb_player_id
+        ))
+        print(f"🔄 Updated: {name}")
+    else:
+        # Insert new record
+        cursor.execute('''
+            INSERT INTO players (
+                mlb_player_id, name, position, team, dob, bats, throws, weight, href
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            mlb_player_id,
+            name,
+            position,
+            'LAD',
+            dob,
+            bats,
+            throws,
+            int(weight) if weight and weight.isdigit() else None,
+            href
+        ))
+        print(f"✅ Inserted: {name}")
 
 # Commit and close
 conn.commit()
 conn.close()
 
-print("\n\n Dodgers roster scraped and inserted into the database!\n\n") 
+print("\n\n Dodgers roster scraped, updated, and inserted into the database!\n\n")
