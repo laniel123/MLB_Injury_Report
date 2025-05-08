@@ -1,3 +1,5 @@
+
+
 import sqlite3
 import time
 import pandas as pd
@@ -7,11 +9,6 @@ from webdriver_manager.chrome import ChromeDriverManager
 from bs4 import BeautifulSoup
 import unicodedata
 
-# Normalize player name (remove accents, lowercase, hyphenate)
-def normalize_name(name):
-    nfkd_form = unicodedata.normalize('NFKD', name)
-    only_ascii = nfkd_form.encode('ASCII', 'ignore').decode('ASCII')
-    return only_ascii.lower().replace(' ', '-')
 
 # Database setup
 db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
@@ -21,6 +18,12 @@ cursor = conn.cursor()
 # Query all players
 df = pd.read_sql_query('SELECT name, mlb_player_id FROM players', conn)
 player_list = [{'name': row['name'], 'id': str(row['mlb_player_id'])} for _, row in df.iterrows()]
+
+# Normalize player name (remove accents, lowercase, hyphenate)
+def normalize_name(name):
+    nfkd_form = unicodedata.normalize('NFKD', name)
+    only_ascii = nfkd_form.encode('ASCII', 'ignore').decode('ASCII')
+    return only_ascii.lower().replace(' ', '-')
 
 # Selenium setup
 driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
