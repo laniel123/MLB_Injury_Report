@@ -10,7 +10,7 @@ conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
 # Dodgers roster URL
-url = 'https://www.mlb.com/dodgers/roster/40-man'
+url = 'https://www.mlb.com/dodgers/roster'
 
 # Fetch and parse page
 response = requests.get(url)
