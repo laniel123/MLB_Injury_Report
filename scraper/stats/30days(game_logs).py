@@ -1,135 +1,113 @@
-import requests
-import pandas as pd
-import unicodedata
-from bs4 import BeautifulSoup as bs
-import sqlite3
-import time
 
-# Setup DB connection
+import requests
+import sqlite3
+from datetime import datetime
+
+# Connect to SQLite DB
 db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
-# Function to extract data from a specific column in a row
-def extract(col_class, row):
+# Ensure game_logs table exists
+cursor.execute('''
+CREATE TABLE IF NOT EXISTS game_logs (
+    mlb_player_id TEXT,
+    game_date TEXT,
+    team TEXT,
+    opponent TEXT,
+    ab INTEGER,
+    r INTEGER,
+    h INTEGER,
+    tb INTEGER,
+    doubles INTEGER,
+    triples INTEGER,
+    hr INTEGER,
+    rbi INTEGER,
+    bb INTEGER,
+    ibb INTEGER,
+    so INTEGER,
+    sb INTEGER,
+    cs INTEGER,
+    avg REAL,
+    obp REAL,
+    slg REAL,
+    hbp INTEGER,
+    sac INTEGER,
+    sf INTEGER,
+    PRIMARY KEY (mlb_player_id, game_date)
+);
+''')
+
+# Load all players from the database
+players_df = cursor.execute("SELECT mlb_player_id FROM players").fetchall()
+players = [str(row[0]) for row in players_df]
+
+for mlb_id in players:
+    url = f"https://statsapi.mlb.com/api/v1/people/{mlb_id}/stats?stats=gameLog&season=2025"
+    print(f"Fetching game logs for player {mlb_id}...")
+
     try:
-        for td in row.find_all('td'):
-            if col_class in td.get('class', []):
-                return td.get_text(strip=True)
-    except Exception:
-        return None
-    return None
+        response = requests.get(url)
+        data = response.json()
+        splits = data["stats"][0]["splits"]
+    except Exception as e:
+        print(f"Error fetching logs for player {mlb_id}: {e}")
+        continue
 
-# Query all players
-df = pd.read_sql_query('SELECT name, mlb_player_id FROM players', conn)
-player_list = [{'name': row['name'], 'id': str(row['mlb_player_id'])} for _, row in df.iterrows()]
+    # Get the most recent game_date stored for this player
+    cursor.execute("SELECT MAX(game_date) FROM game_logs WHERE mlb_player_id = ?", (mlb_id,))
+    last_date = cursor.fetchone()[0]
+    last_date = datetime.strptime(last_date, "%Y-%m-%d").date() if last_date else None
 
-# Normalize player name (remove accents, lowercase, hyphenate)
-def normalize_name(name):
-    nfkd_form = unicodedata.normalize('NFKD', name)
-    only_ascii = nfkd_form.encode('ASCII', 'ignore').decode('ASCII')
-    return only_ascii.lower().replace(' ', '-')
+    new_logs = 0
+    for game in splits:
+        stat = game["stat"]
+        date_str = game["date"]
+        game_date = datetime.strptime(date_str, "%Y-%m-%d").date()
 
-# Query all players and build the normalized list
-df = pd.read_sql_query('SELECT name, mlb_player_id FROM players', conn)
-players = [
-    {'name': normalize_name(row['name']), 'id': str(row['mlb_player_id'])}
-    for _, row in df.iterrows()
-]
-
-for player in players:
-    player_name = player['name']
-    mlb_player_id = player['id']
-    url = f'https://www.mlb.com/player/{player_name}-{mlb_player_id}?stats=gamelogs'
-    print(f"Scraping {player_name.title().replace('-', ' ')} at URL: {url}...")
-
-    try:
-        res = requests.get(url)
-        soup = bs(res.text, 'html.parser')
-        table = soup.find('table')
-
-        if not table:
-            print(f"⚠️ No game log table found for {player_name}")
+        # Skip if already recorded
+        if last_date and game_date <= last_date:
             continue
 
-        rows = table.find_all('tr')[1:]  # Skip header
-        for row in rows:
-            ab_raw = extract('col-3', row)
-            try:
-                ab = int(float(ab_raw))
-            except ValueError:
-                print(f"⚠️ Skipping row due to non-numeric AB: {ab_raw}")
-                continue
+        team_info = game.get("team", {})
+        opponent_info = game.get("opponent", {})
 
-            game_date = extract('col-1', row)
-            team = extract('col-2', row)
-            opponent = extract('col-22', row)
+        team = team_info.get("abbreviation") or team_info.get("name", "")
+        opponent = opponent_info.get("abbreviation") or opponent_info.get("name", "")
 
-            try:
-                stats = {
-                    'ab': ab,
-                    'r': int(float(extract('col-4', row) or 0)),
-                    'h': int(float(extract('col-5', row) or 0)),
-                    'tb': int(float(extract('col-6', row) or 0)),
-                    'doubles': int(float(extract('col-7', row) or 0)),
-                    'triples': int(float(extract('col-8', row) or 0)),
-                    'hr': int(float(extract('col-9', row) or 0)),
-                    'rbi': int(float(extract('col-10', row) or 0)),
-                    'bb': int(float(extract('col-11', row) or 0)),
-                    'ibb': int(float(extract('col-12', row) or 0)),
-                    'so': int(float(extract('col-13', row) or 0)),
-                    'sb': int(float(extract('col-14', row) or 0)),
-                    'cs': int(float(extract('col-15', row) or 0)),
-                    'avg': float(extract('col-16', row) or 0),
-                    'obp': float(extract('col-17', row) or 0),
-                    'slg': float(extract('col-18', row) or 0),
-                    'hbp': int(float(extract('col-19', row) or 0)),
-                    'sac': int(float(extract('col-20', row) or 0)),
-                    'sf': int(float(extract('col-21', row) or 0))
-                }
-            except (ValueError, TypeError):
-                print(f"⚠️ Skipping malformed row for {player_name}: {[td.text.strip() for td in row.find_all('td')]}")
-                continue
+        cursor.execute('''
+            INSERT OR IGNORE INTO game_logs (
+                mlb_player_id, game_date, team, opponent, ab, r, h, tb, doubles, triples,
+                hr, rbi, bb, ibb, so, sb, cs, avg, obp, slg, hbp, sac, sf
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (
+            mlb_id,
+            date_str,
+            team,
+            opponent,
+            stat.get("atBats", 0),
+            stat.get("runs", 0),
+            stat.get("hits", 0),
+            stat.get("totalBases", 0),
+            stat.get("doubles", 0),
+            stat.get("triples", 0),
+            stat.get("homeRuns", 0),
+            stat.get("rbi", 0),
+            stat.get("baseOnBalls", 0),
+            stat.get("intentionalWalks", 0),
+            stat.get("strikeOuts", 0),
+            stat.get("stolenBases", 0),
+            stat.get("caughtStealing", 0),
+            float(stat.get("avg", 0.0)) if stat.get("avg") else None,
+            float(stat.get("obp", 0.0)) if stat.get("obp") else None,
+            float(stat.get("slg", 0.0)) if stat.get("slg") else None,
+            stat.get("hitByPitch", 0),
+            stat.get("sacBunts", 0),
+            stat.get("sacFlies", 0)
+        ))
+        new_logs += 1
 
-            cursor.execute(
-                'SELECT COUNT(*) FROM game_logs WHERE mlb_player_id = ? AND game_date = ?',
-                (mlb_player_id, game_date)
-            )
-            exists = cursor.fetchone()[0] > 0
+    conn.commit()
+    print(f"Inserted {new_logs} new logs for player {mlb_id}")
 
-            if exists:
-                cursor.execute('''
-                    UPDATE game_logs
-                    SET team = ?, opponent = ?, ab = ?, r = ?, h = ?, tb = ?, doubles = ?, triples = ?,
-                        hr = ?, rbi = ?, bb = ?, ibb = ?, so = ?, sb = ?, cs = ?, avg = ?, obp = ?, slg = ?,
-                        hbp = ?, sac = ?, sf = ?
-                    WHERE mlb_player_id = ? AND game_date = ?
-                ''', (
-                    team, opponent, stats['ab'], stats['r'], stats['h'], stats['tb'], stats['doubles'],
-                    stats['triples'], stats['hr'], stats['rbi'], stats['bb'], stats['ibb'], stats['so'],
-                    stats['sb'], stats['cs'], stats['avg'], stats['obp'], stats['slg'], stats['hbp'],
-                    stats['sac'], stats['sf'], mlb_player_id, game_date
-                ))
-                print(f"🔄 Updated: {player_name} | {game_date} vs {opponent}")
-            else:
-                cursor.execute('''
-                    INSERT INTO game_logs (
-                        mlb_player_id, game_date, team, opponent, ab, r, h, tb, doubles, triples,
-                        hr, rbi, bb, ibb, so, sb, cs, avg, obp, slg, hbp, sac, sf
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    mlb_player_id, game_date, team, opponent, stats['ab'], stats['r'], stats['h'],
-                    stats['tb'], stats['doubles'], stats['triples'], stats['hr'], stats['rbi'],
-                    stats['bb'], stats['ibb'], stats['so'], stats['sb'], stats['cs'], stats['avg'],
-                    stats['obp'], stats['slg'], stats['hbp'], stats['sac'], stats['sf']
-                ))
-                print(f"✅ Inserted: {player_name} | {game_date} vs {opponent}")
-
-        time.sleep(3)
-
-    except Exception as e:
-        print(f"❌ Error scraping {player_name}: {e}")
-
-conn.commit()
 conn.close()
-print("\n✅ Game logs updated and stored.") 
