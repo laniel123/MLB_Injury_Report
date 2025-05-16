@@ -98,3 +98,6 @@ def injury(log_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr
     conn.close()
 
     print('All injury data scraped and processed!')
+
+if __name__ == "__main__":
+    injury()
