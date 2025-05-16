@@ -14,6 +14,9 @@ db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodger
 conn = sqlite3.connect(db_path)
 cursor = conn.cursor()
 
+# Selenium setup
+driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
+
 
 # Query all players
 df = pd.read_sql_query('SELECT name, mlb_player_id FROM players', conn)
@@ -25,8 +28,6 @@ def normalize_name(name):
     only_ascii = nfkd_form.encode('ASCII', 'ignore').decode('ASCII')
     return only_ascii.lower().replace(' ', '-')
 
-# Selenium setup
-driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()))
 
 def scrape_player(player_name, mlb_player_id):
     norm_name = normalize_name(player_name)

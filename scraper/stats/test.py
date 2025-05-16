@@ -3,17 +3,6 @@ from bs4 import BeautifulSoup
 import sqlite3
 import time
 
-def safe_int(value):
-    try:
-        return int(float(value))
-    except (ValueError, TypeError):
-        return None
-
-def safe_float(value):
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return None
 
 def extract(col_class, row):
     try:
@@ -24,54 +13,6 @@ def extract(col_class, row):
         return None
     return None
 
-def scrape_player(name, player_id):
-    url = f"https://www.mlb.com/player/{name}-{player_id}/gamelog"
-    print(f"Scraping {name} at URL: {url}...")
-
-    try:
-        res = requests.get(url)
-        soup = BeautifulSoup(res.text, 'html.parser')
-        table = soup.find('table')
-
-        if not table:
-            print(f"⚠️ No game log table found for {name}")
-            return
-
-        rows = table.find_all('tr')[1:]  # Skip header
-        for row in rows:
-            cells = row.find_all('td')
-            if len(cells) < 20:
-                print(f"⚠️ Skipping malformed row for {name}: {[cell.text for cell in cells]}")
-                continue
-
-            stats = {
-                'player_id': player_id,
-                'date': extract('col-0', row),
-                'opp': extract('col-2', row),
-                'ab': safe_int(extract('col-4', row)),
-                'h': safe_int(extract('col-5', row)),
-                'bb': safe_int(extract('col-10', row)),
-                'so': safe_int(extract('col-11', row)),
-                'ibb': safe_int(extract('col-12', row)),
-                'sf': safe_int(extract('col-21', row)),
-                # Add more fields as needed
-            }
-
-            # Ensure all numeric values are valid (date and opp can be non-numeric)
-            numeric_fields = ['ab', 'h', 'bb', 'so', 'ibb', 'sf']
-            if any(stats[field] is None for field in numeric_fields):
-                print(f"⚠️ Skipping malformed row for {name}: {[cell.text for cell in cells]}")
-                continue
-
-            cursor.execute('''
-                INSERT INTO game_logs (player_id, date, opp, ab, h, bb, so, ibb, sf)
-                VALUES (:player_id, :date, :opp, :ab, :h, :bb, :so, :ibb, :sf)
-            ''', stats)
-
-        conn.commit()
-
-    except Exception as e:
-        print(f"❌ Error scraping {name}: {e}")
 
 # Setup DB connection
 db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
@@ -82,13 +23,103 @@ cursor = conn.cursor()
 players = [
     {'name': 'luis-garcia', 'id': '472610'},
     {'name': 'clayton-kershaw', 'id': '477132'},
-    # ... (add other players as needed)
+    {'name': 'kirby-yates', 'id': '489446'},
+    {'name': 'miguel-rojas', 'id': '500743'},
 ]
 
-# Scrape all players
 for player in players:
-    scrape_player(player['name'], player['id'])
-    time.sleep(4)
+    player_name = player['name']
+    mlb_player_id = player['id']
+    url = f"https://www.mlb.com/player/{player_name}-{mlb_player_id}/gamelog"
+    print(f"Scraping {player_name.title().replace('-', ' ')} at URL: {url}...")
 
-print("\n✅ Game logs updated and stored.")
+    try:
+        res = requests.get(url)
+        soup = BeautifulSoup(res.text, 'html.parser')
+        table = soup.find('table')
+
+        if not table:
+            print(f"⚠️ No game log table found for {player_name}")
+            continue
+
+        rows = table.find_all('tr')[1:]  # Skip header
+        for row in rows:
+            ab_raw = extract('col-3', row)
+            try:
+                ab = int(float(ab_raw))
+            except ValueError:
+                print(f"⚠️ Skipping row due to non-numeric AB: {ab_raw}")
+                continue
+
+            game_date = extract('col-1', row)
+            team = extract('col-2', row)
+            opponent = extract('col-22', row)
+
+            try:
+                stats = {
+                    'ab': ab,
+                    'r': int(float(extract('col-4', row) or 0)),
+                    'h': int(float(extract('col-5', row) or 0)),
+                    'tb': int(float(extract('col-6', row) or 0)),
+                    'doubles': int(float(extract('col-7', row) or 0)),
+                    'triples': int(float(extract('col-8', row) or 0)),
+                    'hr': int(float(extract('col-9', row) or 0)),
+                    'rbi': int(float(extract('col-10', row) or 0)),
+                    'bb': int(float(extract('col-11', row) or 0)),
+                    'ibb': int(float(extract('col-12', row) or 0)),
+                    'so': int(float(extract('col-13', row) or 0)),
+                    'sb': int(float(extract('col-14', row) or 0)),
+                    'cs': int(float(extract('col-15', row) or 0)),
+                    'avg': float(extract('col-16', row) or 0),
+                    'obp': float(extract('col-17', row) or 0),
+                    'slg': float(extract('col-18', row) or 0),
+                    'hbp': int(float(extract('col-19', row) or 0)),
+                    'sac': int(float(extract('col-20', row) or 0)),
+                    'sf': int(float(extract('col-21', row) or 0))
+                }
+            except (ValueError, TypeError):
+                print(f"⚠️ Skipping malformed row for {player_name}: {[td.text.strip() for td in row.find_all('td')]}")
+                continue
+
+            cursor.execute(
+                'SELECT COUNT(*) FROM game_logs WHERE mlb_player_id = ? AND game_date = ?',
+                (mlb_player_id, game_date)
+            )
+            exists = cursor.fetchone()[0] > 0
+
+            if exists:
+                cursor.execute('''
+                    UPDATE game_logs
+                    SET team = ?, opponent = ?, ab = ?, r = ?, h = ?, tb = ?, doubles = ?, triples = ?,
+                        hr = ?, rbi = ?, bb = ?, ibb = ?, so = ?, sb = ?, cs = ?, avg = ?, obp = ?, slg = ?,
+                        hbp = ?, sac = ?, sf = ?
+                    WHERE mlb_player_id = ? AND game_date = ?
+                ''', (
+                    team, opponent, stats['ab'], stats['r'], stats['h'], stats['tb'], stats['doubles'],
+                    stats['triples'], stats['hr'], stats['rbi'], stats['bb'], stats['ibb'], stats['so'],
+                    stats['sb'], stats['cs'], stats['avg'], stats['obp'], stats['slg'], stats['hbp'],
+                    stats['sac'], stats['sf'], mlb_player_id, game_date
+                ))
+                print(f"🔄 Updated: {player_name} | {game_date} vs {opponent}")
+            else:
+                cursor.execute('''
+                    INSERT INTO game_logs (
+                        mlb_player_id, game_date, team, opponent, ab, r, h, tb, doubles, triples,
+                        hr, rbi, bb, ibb, so, sb, cs, avg, obp, slg, hbp, sac, sf
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    mlb_player_id, game_date, team, opponent, stats['ab'], stats['r'], stats['h'],
+                    stats['tb'], stats['doubles'], stats['triples'], stats['hr'], stats['rbi'],
+                    stats['bb'], stats['ibb'], stats['so'], stats['sb'], stats['cs'], stats['avg'],
+                    stats['obp'], stats['slg'], stats['hbp'], stats['sac'], stats['sf']
+                ))
+                print(f"✅ Inserted: {player_name} | {game_date} vs {opponent}")
+
+        time.sleep(3)
+
+    except Exception as e:
+        print(f"❌ Error scraping {player_name}: {e}")
+
+conn.commit()
 conn.close()
+print("\n✅ Game logs updated and stored.")
