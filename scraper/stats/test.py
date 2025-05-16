@@ -1,9 +1,16 @@
 import requests
-from bs4 import BeautifulSoup
+import pandas as pd
+import unicodedata
+from bs4 import BeautifulSoup as bs
 import sqlite3
 import time
 
+# Setup DB connection
+db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
+conn = sqlite3.connect(db_path)
+cursor = conn.cursor()
 
+# Function to extract data from a specific column in a row
 def extract(col_class, row):
     try:
         for td in row.find_all('td'):
@@ -13,29 +20,32 @@ def extract(col_class, row):
         return None
     return None
 
+# Query all players
+df = pd.read_sql_query('SELECT name, mlb_player_id FROM players', conn)
+player_list = [{'name': row['name'], 'id': str(row['mlb_player_id'])} for _, row in df.iterrows()]
 
-# Setup DB connection
-db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'
-conn = sqlite3.connect(db_path)
-cursor = conn.cursor()
+# Normalize player name (remove accents, lowercase, hyphenate)
+def normalize_name(name):
+    nfkd_form = unicodedata.normalize('NFKD', name)
+    only_ascii = nfkd_form.encode('ASCII', 'ignore').decode('ASCII')
+    return only_ascii.lower().replace(' ', '-')
 
-# Load players
+# Query all players and build the normalized list
+df = pd.read_sql_query('SELECT name, mlb_player_id FROM players', conn)
 players = [
-    {'name': 'luis-garcia', 'id': '472610'},
-    {'name': 'clayton-kershaw', 'id': '477132'},
-    {'name': 'kirby-yates', 'id': '489446'},
-    {'name': 'miguel-rojas', 'id': '500743'},
+    {'name': normalize_name(row['name']), 'id': str(row['mlb_player_id'])}
+    for _, row in df.iterrows()
 ]
 
 for player in players:
     player_name = player['name']
     mlb_player_id = player['id']
-    url = f"https://www.mlb.com/player/{player_name}-{mlb_player_id}/gamelog"
+    url = f'https://www.mlb.com/player/{player_name}-{mlb_player_id}?stats=gamelogs'
     print(f"Scraping {player_name.title().replace('-', ' ')} at URL: {url}...")
 
     try:
         res = requests.get(url)
-        soup = BeautifulSoup(res.text, 'html.parser')
+        soup = bs(res.text, 'html.parser')
         table = soup.find('table')
 
         if not table:
