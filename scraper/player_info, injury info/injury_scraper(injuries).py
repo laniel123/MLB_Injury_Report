@@ -69,7 +69,7 @@ for block in injury_blocks:
             ))
             print(f"🔄 Updated: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Injury Start: {injury_start}, Expected Return: {expected_return}")
 
-            with open('/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/logs/scraper_log.txt', 'a') as log_file:
+            with open('/logs/scraper_log.txt', 'a') as log_file:
                 log_file.write(f"Updated: {player_name}, MLB ID: {mlb_player_id}, Injury: {injury_type}, Injury Start: {injury_start}, Expected Return: {expected_return}\n")
         else:
             # Insert new record
