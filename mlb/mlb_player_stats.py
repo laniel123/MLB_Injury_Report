@@ -1,4 +1,3 @@
-
 import requests
 from bs4 import BeautifulSoup
 import sqlite3
@@ -15,7 +14,6 @@ def create_connection():
     return sqlite3.connect(DB_PATH)
 
 
-# Create the mlb_player_stats table if it doesn't exist
 def create_stats_table(conn):
     cursor = conn.cursor()
     cursor.execute('''
@@ -31,6 +29,7 @@ def create_stats_table(conn):
         opponent_name TEXT,
         position TEXT,
         gamesPlayed INTEGER,
+        games TEXT DEFAULT 'na',
         gamesStarted INTEGER,
         assists INTEGER,
         putOuts INTEGER,
@@ -43,9 +42,16 @@ def create_stats_table(conn):
         rangeFactorPerGame TEXT,
         rangeFactorPer9Inn TEXT,
         innings TEXT,
+        inningsPitched TEXT,
+        catcherERA TEXT,
         flyOuts INTEGER,
         groundOuts INTEGER,
         airOuts INTEGER,
+        passedBall INTEGER,
+        wins INTEGER,
+        losses INTEGER,
+        wildPitches INTEGER,
+        pickoffs INTEGER,
         runs INTEGER,
         doubles INTEGER,
         triples INTEGER,
@@ -82,16 +88,24 @@ def create_stats_table(conn):
         game_id INTEGER,
         game_number INTEGER,
         day_night TEXT,
+        era TEXT DEFAULT 'na',
+        game TEXT DEFAULT 'na',
         PRIMARY KEY (mlb_player_id, stat_type, stat_group, season, game_date, position)
     )
     ''')
-    
-    
     conn.commit()
 
+def reset_stats_table():
+    conn = create_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute('DROP TABLE IF EXISTS mlb_player_stats')
+        conn.commit()
+    finally:
+        conn.close()
 
-# Scrape and store stats for all players in mlb_player_info
 def scrape_and_store_stats_for_all_players():
+    reset_stats_table()
     conn = create_connection()
     create_stats_table(conn)
     cursor = conn.cursor()
@@ -132,7 +146,11 @@ def scrape_and_store_stats_for_all_players():
                         "game_number": split.get("game", {}).get("gameNumber"),
                         "day_night": split.get("game", {}).get("dayNight"),
                     }
-                    values.update(split.get("stat", {}))
+                    stat_data = split.get("stat", {})
+                    for stat_key in stat_data:
+                        if isinstance(stat_data[stat_key], dict) or stat_data[stat_key] is None:
+                            stat_data[stat_key] = "NA"
+                    values.update(stat_data)
 
                     keys = ', '.join(values.keys())
                     placeholders = ', '.join('?' for _ in values)
@@ -145,3 +163,6 @@ def scrape_and_store_stats_for_all_players():
             continue
 
     conn.close()
+
+if __name__ == "__main__":
+    scrape_and_store_stats_for_all_players()
