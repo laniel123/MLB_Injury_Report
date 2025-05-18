@@ -117,7 +117,7 @@ def scrape_and_store_stats_for_all_players():
         params = {
             "stats": "season,career,gameLog",
             "group": "hitting,pitching,fielding",
-            "season": "2024"
+            "season": "2025"
         }
         try:
             response = requests.get(url, params=params)
