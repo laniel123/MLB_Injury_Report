@@ -117,7 +117,7 @@ def scrape_and_store_stats_for_all_players():
         params = {
             "stats": "season,career,gameLog",
             "group": "hitting,pitching,fielding",
-            "season": "2020"
+            "season": "2025"
         }
         
         try:
@@ -155,7 +155,7 @@ def scrape_and_store_stats_for_all_players():
 
                     keys = ', '.join(values.keys())
                     placeholders = ', '.join('?' for _ in values)
-                    sql = f'INSERT OR IGNORE INTO mlb_player_stats ({keys}) VALUES ({placeholders})'
+                    sql = f'INSERT OR REPLACE INTO mlb_player_stats ({keys}) VALUES ({placeholders})'
                     cursor.execute(sql, tuple(values.values()))
             conn.commit()
             print(f"✅ Stats stored for player {mlb_id}")
