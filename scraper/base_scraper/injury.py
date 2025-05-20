@@ -4,7 +4,9 @@ from bs4 import BeautifulSoup
 import re
 
 # This script scrapes the Dodgers injury report from MLB.com and updates a local SQLite database.
-def injury(log_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/logs/injury_pipeline.log', db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'):
+def injury(log_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/logs/injury_pipeline.log', 
+           db_path = '/Users/daniellarson/Desktop/Code/Projects/dodgers_injtrkr/data/dodgers_injury_db.sqlite'):
+    
     # Connect to your local database
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
