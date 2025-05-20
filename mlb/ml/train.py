@@ -29,6 +29,10 @@ print("After filledna:", df.shape)
 df = pd.get_dummies(df)
 print("After get_dummies:", df.shape)
 
+# STEP 4.1: Ensure the target column 'injured' is present
+if 'injured' not in df.columns:
+    df['injured'] = 1  # Since this file only contains injured players
+
 # STEP 4.5: Correlation heatmap of top features
 corr_matrix = df.corr(numeric_only=True)
 top_features = corr_matrix['injured'].abs().sort_values(ascending=False).head(15).index
@@ -39,10 +43,6 @@ sns.heatmap(corr_subset, annot=True, cmap='coolwarm', fmt=".2f", square=True, li
 plt.title("🔗 Correlation Between Top Features and Injury")
 plt.tight_layout()
 plt.show()
-
-# STEP 5: Ensure the target column 'injured' is present
-if 'injured' not in df.columns:
-    df['injured'] = 1  # Since this file only contains injured players
 
 # STEP 6: Separate features and target
 X = df.drop('injured', axis=1)
