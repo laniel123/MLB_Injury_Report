@@ -19,12 +19,12 @@ if __name__ == "__main__":
     time.sleep(1)
     
     # Call the player_info function to scrape player data
-    #player_info()
+    player_info()
     
     time.sleep(3)
 
     # Call the injury function to scrape injury data    
-    #injury()
+    injury()
     
     time.sleep(3)
     
