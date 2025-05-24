@@ -68,6 +68,11 @@ This project is a machine learning pipeline designed to predict MLB player injur
 - Top-ranked player injury risk tables per team.
 - CSV exports of injury risk predictions for further analysis.
 
+## Future improvements: 
+
+- Improve model accuracy by implementing more features.
+- Change file paths so they aren't hardcoded to my computer to promote ease across different machines. 
+
 ---
 
 This project helps MLB analysts, data scientists, and sports teams monitor player fatigue and anticipate injury risks using machine learning tools.
