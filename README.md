@@ -16,7 +16,7 @@ This project is a machine learning pipeline designed to predict MLB player injur
     - Player game logs
     - Injury history (with columns for player, date, season, team, and injury description)
 
-### 🏗 Data Preprocessing
+###  Data Preprocessing
 - Calculates 5-game and 10-game rolling averages for player workload and performance metrics.
 - Merges game logs with injury data to label records as injured or not.
 - Ensures consistent feature preparation across teams (e.g., Dodgers, Phillies).
