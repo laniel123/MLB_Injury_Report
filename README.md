@@ -1,7 +1,7 @@
 
 # ⚾ Dodgers Injury Risk Prediction Project
 
-This project is a machine learning pipeline designed to predict MLB player injury risks, initially focusing on the Dodgers but not currently extensible to any MLB team.
+This project is a machine learning pipeline designed to predict MLB player injury risks, initially focusing on the Dodgers but currently extensible to any MLB team.
 
 ## 📂 Components
 
