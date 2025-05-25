@@ -91,7 +91,7 @@ def get_injury_risk_ranking(
     game_logs["Date"] = pd.to_datetime(game_logs["Date"])
     injury_stats["injury_date"] = pd.to_datetime(injury_stats["injury_date"])
     game_logs["Injured"] = 0
-
+    
     for _, row in injury_stats.iterrows():
         player_id = row["mlb_player_id"]
         injury_date = row["injury_date"]
@@ -111,21 +111,27 @@ def get_injury_risk_ranking(
     new_game_logs = game_logs.copy()
     new_game_logs["Date"] = pd.to_datetime(new_game_logs["Date"])
     new_game_logs = new_game_logs.drop(columns=["Name", "Date", "Team", "OPP"])
+    
     stats_cols = new_game_logs.drop(columns=["PlayerID", "Injured"]).columns
     new_game_logs_numeric = new_game_logs[stats_cols].apply(pd.to_numeric, errors='coerce')
+    
     roll5 = new_game_logs_numeric.groupby(new_game_logs["PlayerID"]).rolling(5, min_periods=1).mean().reset_index(level=0, drop=True).add_suffix('_roll5')
     roll10 = new_game_logs_numeric.groupby(new_game_logs["PlayerID"]).rolling(10, min_periods=1).mean().reset_index(level=0, drop=True).add_suffix('_roll10')
     new_game_logs = pd.concat([new_game_logs, roll5, roll10], axis=1)
     new_game_logs = new_game_logs.drop(columns=list(stats_cols) + ["PlayerID"])
     new_game_logs = new_game_logs.fillna(0)
     uninjured_players = new_game_logs[new_game_logs['Injured'] == 0]
+    
     X_uninjured = uninjured_players.drop(columns=['Injured'])
     X_uninjured = X_uninjured[feature_names]
+    
     injury_probs = xgb_model.predict_proba(X_uninjured)[:, 1]
+    
     uninjured_players = uninjured_players.copy()
     uninjured_players['Injury_Risk'] = injury_probs
     uninjured_players['PlayerID'] = game_logs.loc[uninjured_players.index, 'PlayerID']
     uninjured_players['Name'] = game_logs.loc[uninjured_players.index, 'Name']
+    
     ranked_risk = (
         uninjured_players[['PlayerID', 'Name', 'Injury_Risk']]
         .sort_values(by='Injury_Risk', ascending=False)
@@ -134,5 +140,15 @@ def get_injury_risk_ranking(
     ranked_risk['Injury_Risk_Percent'] = (ranked_risk['Injury_Risk'] * 100).round(2).astype(str) + '%'
     ranked_risk['Rank'] = ranked_risk['Injury_Risk'].rank(method='first', ascending=False).astype(int)
     ranked_risk = ranked_risk[['Rank', 'Name', 'PlayerID', 'Injury_Risk_Percent']]
+    
     conn.close()
+    
+    print(ranked_risk.head(30))
     return ranked_risk
+
+if __name__ == "__main__":
+    
+    ranked_risk = get_injury_risk_ranking()
+    
+    #ranked_risk.to_csv('injury_risk_rankings.csv', index=False)
+    #print("Injury risk rankings saved to 'injury_risk_rankings.csv'")
