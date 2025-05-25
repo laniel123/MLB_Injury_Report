@@ -16,17 +16,17 @@ from ml.train import get_injury_risk_ranking
 
 if __name__ == "__main__":
     # Step 1: Scrape and store injury data from MLB API for each player
-    #scrape_and_store_injuries_for_all_players()
+    scrape_and_store_injuries_for_all_players()
     
     
     print("Injury data scraped and stored successfully.")
     
     # Step 2: Scrape and store player stats from MLB API for each player
-    #scrape_and_store_stats_for_all_players()
+    scrape_and_store_stats_for_all_players()
     
     print("Player stats scraped and stored successfully.")
     
-    # Step 3: Train the model and get injury risk ranking
+    # Step 3: Train the model and get injury risk ranking top 30 mlb players sorted from highest to lowest injury risk
     get_injury_risk_ranking()
     
     

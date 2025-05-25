@@ -143,7 +143,11 @@ def get_injury_risk_ranking(
     
     conn.close()
     
+    print("\n\nTop 30 Players by Injury Risk:")
+    print("--------------------------------------------------")
     print(ranked_risk.head(30))
+    print("\n\n")
+    
     return ranked_risk
 
 if __name__ == "__main__":
